@@ -3,18 +3,21 @@ from airflow.operators import BashOperator
 from airflow.operators import PythonOperator
 from datetime import datetime, timedelta
 from airflow.operators.dagrun_operator import TriggerDagRunOperator
+from airflow.operators.sensors import SqlSensor
 import time
 
 
 default_args = {
     'owner': 'DMR',
-    'depends_on_past': True,
+    'depends_on_past': False,
     'email': ['sanddas@paypal.com'],
     'email_on_failure': True,
     'email_on_retry': True,
     'retries': 2,
     'retry_delay': timedelta(minutes=1),
-    'start_date': datetime(2017, 1, 30),
+    #'start_date': datetime.now()
+    'start_date': datetime(2017, 1, 31),
+    'max_active_runs' : 1
 ##    'queue': 'simba_queue'
 }
 def print_context(ds, **kwargs):
@@ -35,12 +38,16 @@ def conditionally_trigger(context, dag_run_obj):
            print(dag_run_obj.payload)
            return dag_run_obj
 pub_id=3
-dag_ver='v2'
+dag_ver='v4'
 dag_id='PUB_{0}_{1}'.format(pub_id,dag_ver)
 sub_id=3
 sub_id_ver='v1'
+pubid_sql=72
 
-dag=DAG(dag_id,  schedule_interval="30 5 * * *", default_args=default_args)
+
+dag=DAG('PUB_3_v4',  schedule_interval=None, default_args=default_args)
+t0=SqlSensor(
+            task_id = 'sql_sensor_{}'.format(pub_id),conn_id ='sd_batch1',sql='select b.publishid from syncsystemobjectupdate a, syncpublish b where lower(a.objectdesc) = lower(b.objectdesc) and b.publishid = {}'.format(pubid_sql), dag=dag) 
 t1=PythonOperator(
             task_id='python_{}_1'.format(pub_id),
             python_callable=my_display_function,
@@ -71,6 +78,7 @@ t7=TriggerDagRunOperator(
     params={'condition_param': True,
     'message': 'Hello World'},
     dag=dag)
+t1.set_upstream(t0)
 t2.set_upstream(t1)
 t3.set_upstream(t2)
 t4.set_upstream(t3)
